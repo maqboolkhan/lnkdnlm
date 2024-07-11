@@ -1,5 +1,10 @@
 # lnkdnlm
-A _Python_ [what am i?] that [what do i do?] build with poetry.
+A Project which dreams to streamline job searching using open source llms on your PC!
+In heavy development these day. Follow the repository and Keep in touch.
+
+Screenshot:
+
+![Screenshot](screensot-lnkdnlm.png)
 
 ## Prerequisites
 * Python >= 3.7, you can use for example [pyenv](https://github.com/pyenv/pyenv#installation) to manage that

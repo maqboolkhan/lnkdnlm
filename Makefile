@@ -57,3 +57,7 @@ test: unit-test integration-test ## Runs all tests
 
 .PHONY: check
 check: auto-format lint type-check test ## Runs all code checks and tests
+
+ .PHONY: run
+run: ## Runs all integration tests
+	poetry run streamlit run lnkdnlm/main.py
