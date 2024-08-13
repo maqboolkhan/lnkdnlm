@@ -1,4 +1,7 @@
+import os
 import sys
+import time
+
 import click
 from dotenv import load_dotenv
 from langchain import hub
@@ -6,7 +9,6 @@ import streamlit as st
 from streamlit_extras.tags import tagger_component
 
 from langchain_core.output_parsers import JsonOutputParser
-from langchain_core.pydantic_v1 import BaseModel, Field
 
 from fetcher import get_linkedin_jobs
 
@@ -17,13 +19,6 @@ from langchain_core.prompts import ChatPromptTemplate
 
 load_dotenv()
 
-
-# Define your desired data structure.
-class Joke(BaseModel):
-    is_relavant_job: bool = Field(description="boolean value if job description relevant to given user criteria")
-    reason: str = Field(description="reason why job description is relevant or not")
-
-json_parser = JsonOutputParser()
 
 if 'clicked' not in st.session_state:
     st.session_state.clicked = False
@@ -38,7 +33,7 @@ def main(args=None) -> int:
     with st.container():
         # Inject custom CSS to set the width of the sidebar
         st.markdown(
-        """
+            """
             <style>
                 section[data-testid="stSidebar"] {
                     width: 50% !important; # Set the width to your desired value
@@ -63,7 +58,8 @@ def main(args=None) -> int:
             st.button("Search it ...", type="primary", use_container_width=True, on_click=click_button)
 
         llm = ChatOllama(
-            model="phi3:mini",
+            base_url=os.getenv("OLLAMA_ENDPOINT"),
+            model=os.getenv("OLLAMA_MODEL"),
             keep_alive=-1,  # keep the model loaded indefinitely
             temperature=0,
             seed=1234
@@ -75,6 +71,7 @@ def main(args=None) -> int:
         # hub.push("jobs", prompt, new_repo_is_public=False)
         # exit()
 
+        json_parser = JsonOutputParser()
         # using LangChain Expressive Language chain syntax
         chain = prompt | llm | json_parser
 
@@ -86,14 +83,17 @@ def main(args=None) -> int:
                     st.markdown(f"##### {job['company_name']}")
                     print("Invoking chain .. ")
                     with st.spinner('Reading it carefully...'):
+                        start = time.perf_counter()
                         res = chain.invoke({
                             "job_title": job["job_title"],
                             "job_company": job["company_name"],
                             "job_company_location": job["city"],
                             "job_description": job["job_description"],
                             "criteria": desired_criteria})
-                    print(res)
-                    if res["is_relevant_job"]:
+                        end = time.perf_counter()
+                        elapsed_time = end - start  # Calculate the elapsed time
+                        print(f"Time took: {elapsed_time} seconds")
+                    if "is_relevant_job" in res and res["is_relevant_job"]:
                         tagger_component(
                             "",
                             ["Matched ✅"],

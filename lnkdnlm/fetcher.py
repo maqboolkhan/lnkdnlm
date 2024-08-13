@@ -1,3 +1,5 @@
+import time
+
 import httpx
 from bs4 import BeautifulSoup as bs
 from markdownify import markdownify as md
@@ -55,55 +57,66 @@ def get_linkedin_jobs(job_title, location, time_option):
         print("Getting job details: ", job_url)
 
         # Send a GET request to the job URL and parse the reponse
-        job_response = httpx.get(job_url)
-        job_soup = bs(job_response.text, "html.parser")
+        fetch_url = True
+        while fetch_url:
+            job_response = httpx.get(job_url)
+            job_soup = bs(job_response.text, "html.parser")
+            if not job_soup.find("section"):
+                # Fetching job details was not successful
+                print("Will have to retry!")
+                time.sleep(0.5)
+            else:
+                # Fetching job details was successful
+                fetch_url = False
+                # Create a dictionary to store job details
+                job_url_a = job_soup.find("a", {"class": "topcard__link"})
+                job_post = {"job_url": job_url_a.attrs["href"]}
 
-         # Create a dictionary to store job details
-        job_url_a = soup.find("a", { "class": "base-card__full-link"})
-        job_post = {"job_url": job_url_a.get('href')}
+                # Try to extract and store the job title
+                try:
+                    job_post["job_title"] = job_soup.find("h2", {
+                        "class": "top-card-layout__title font-sans text-lg papabear:text-xl font-bold leading-open text-color-text mb-0 topcard__title"}).text.strip()
+                except:
+                    job_post["job_title"] = None
 
-        # Try to extract and store the job title
-        try:
-            job_post["job_title"] = job_soup.find("h2", {"class":"top-card-layout__title font-sans text-lg papabear:text-xl font-bold leading-open text-color-text mb-0 topcard__title"}).text.strip()
-        except:
-            job_post["job_title"] = None
+                # Try to extract and store the company name
+                try:
+                    job_post["company_name"] = job_soup.find("a", {
+                        "class": "topcard__org-name-link topcard__flavor--black-link"}).text.strip()
+                except:
+                    job_post["company_name"] = None
 
-        # Try to extract and store the company name
-        try:
-            job_post["company_name"] = job_soup.find("a", {
-                "class": "topcard__org-name-link topcard__flavor--black-link"}).text.strip()
-        except:
-            job_post["company_name"] = None
+                try:
+                    job_post["city"] = job_soup.find("span", {
+                        "class": "topcard__flavor topcard__flavor--bullet"}).text.strip()
+                except:
+                    job_post["city"] = None
 
-        try:
-            job_post["city"] = job_soup.find("span", {
-                "class": "topcard__flavor topcard__flavor--bullet"}).text.strip()
-        except:
-            job_post["city"] = None
+                try:
+                    job_desc_html = job_soup.find("div", {"class": "description__text description__text--rich"})
+                    for e in job_desc_html.find_all(class_="show-more-less-html__button"):
+                        e.decompose()
+                    job_post["job_description"] = md(str(job_desc_html)).strip()
+                except Exception as e:
+                    print(e)
+                    job_post["job_description"] = None
 
-        try:
-            job_desc_html = job_soup.find("div", {"class": "description__text description__text--rich"})
-            for e in job_desc_html.find_all(class_="show-more-less-html__button"):
-                e.decompose()
-            job_post["job_description"] = md(str(job_desc_html)).strip()
-        except Exception as e:
-            print(e)
-            job_post["job_description"] = None
+                # Try to extract and store the time posted
+                try:
+                    job_post["time_posted"] = job_soup.find("span", {
+                        "class": "posted-time-ago__text topcard__flavor--metadata"}).text.strip()
+                except:
+                    job_post["time_posted"] = None
 
-        # Try to extract and store the time posted
-        try:
-            job_post["time_posted"] = job_soup.find("span", {"class": "posted-time-ago__text topcard__flavor--metadata"}).text.strip()
-        except:
-            job_post["time_posted"] = None
+                # Try to extract and store the number of applicants
+                try:
+                    job_post["num_applicants"] = job_soup.find("span", {
+                        "class": "num-applicants__caption topcard__flavor--metadata topcard__flavor--bullet"}).text.strip()
+                except:
+                    job_post["num_applicants"] = None
 
-        # Try to extract and store the number of applicants
-        try:
-            job_post["num_applicants"] = job_soup.find("span", {"class": "num-applicants__caption topcard__flavor--metadata topcard__flavor--bullet"}).text.strip()
-        except:
-            job_post["num_applicants"] = None
-
-        # Append the job details to the job_list
-        job_list.append(job_post)
+                # Append the job details to the job_list
+                job_list.append(job_post)
 
     return job_list
 
