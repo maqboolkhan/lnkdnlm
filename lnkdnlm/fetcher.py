@@ -1,3 +1,4 @@
+import re
 import time
 
 import httpx
@@ -5,16 +6,15 @@ from bs4 import BeautifulSoup as bs
 from markdownify import markdownify as md
 
 
-def get_linkedin_jobs(job_title, location, time_option):
-    # Initialize an empty list to store job information
-    job_list = []
-
+def fetch_linkedin_page_jobs(job_title, location, time_option, page):
+    start = "0" if page == 1 else f"{page-1}{page-1}"
     duration = {
         "Past week": "r604800",
         "Past month": "r2592000",
         "Past 24 hours": "r86400"
     }
 
+    # &f_E={level}
     EXP_Internship = 1
     EXP_Entry = 2
     EXP_level = 3
@@ -23,26 +23,36 @@ def get_linkedin_jobs(job_title, location, time_option):
     EXP_level = 6
     EXP_Director = 7
 
+    # f_WT={}
     COND_ON_SITE = 1
     COND_HYBRID = 2
     COND_REMOTE = 3
 
-    URL_JOBS = "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords={title}&location={location}&f_TPR={time_posted}" # &f_E={level} &start=11 f_WT={}
+    URL_JOBS = "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords={title}&location={location}&f_TPR={time_posted}"
 
+    job_title = re.sub(r'\s', '+', job_title)
     query_url = URL_JOBS.replace("{title}", job_title).replace("{location}", location).replace('{time_posted}', duration[time_option])
+
+    if page > 1:
+        query_url += f"&start={start}"
+
     print(query_url)
     response = httpx.get(query_url)
 
     if response.status_code == 200:
         print("All good with requests!", end=" ")
     else:
-        print(f"Linkedin API request was not successful, status code {response.status_code}",end=" ")
-        return job_list
+        print(f"Linkedin API request was not successful, status code {response.status_code}", end=" ")
+        return None
 
     soup = bs(response.text, 'html.parser')
     page_jobs = soup.find_all("li")
+    return page_jobs
 
+
+def parse_linkedin_jobs_to_dictionary_list(page_jobs):
     job_ids = []
+    job_list = []
     for job in page_jobs:
         base_card_div = job.select(".base-card")[0]
         job_id = base_card_div.get("data-entity-urn").split(":")[3]

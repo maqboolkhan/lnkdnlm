@@ -10,11 +10,9 @@ from streamlit_extras.tags import tagger_component
 
 from langchain_core.output_parsers import JsonOutputParser
 
-from fetcher import get_linkedin_jobs
+from fetcher import parse_linkedin_jobs_to_dictionary_list, fetch_linkedin_page_jobs
 
 from langchain_community.chat_models import ChatOllama
-from langchain_core.output_parsers import StrOutputParser
-from langchain_core.prompts import ChatPromptTemplate
 
 
 load_dotenv()
@@ -64,7 +62,7 @@ def main(args=None) -> int:
             temperature=0,
             seed=1234
         )
-
+        # TODO: Check here if Ollama is online and connected
         prompt = hub.pull("jobs")
 
         # prompt = ChatPromptTemplate.from_template("""    """)
@@ -76,38 +74,56 @@ def main(args=None) -> int:
         chain = prompt | llm | json_parser
 
         if st.session_state.clicked:
-            linkedin_jobs = get_linkedin_jobs(job_title, location, time_option)
-            for job in linkedin_jobs:
-                if job['job_title'] and job['job_url'] and job["job_description"]:
-                    st.markdown(f"### [{job['job_title']}]({job['job_url']})")
-                    st.markdown(f"##### {job['company_name']}")
-                    print("Invoking chain .. ")
-                    with st.spinner('Reading it carefully...'):
-                        start = time.perf_counter()
-                        res = chain.invoke({
-                            "job_title": job["job_title"],
-                            "job_company": job["company_name"],
-                            "job_company_location": job["city"],
-                            "job_description": job["job_description"],
-                            "criteria": desired_criteria})
-                        end = time.perf_counter()
-                        elapsed_time = end - start  # Calculate the elapsed time
-                        print(f"Time took: {elapsed_time} seconds")
-                    if "is_relevant_job" in res and res["is_relevant_job"]:
-                        tagger_component(
-                            "",
-                            ["Matched ✅"],
-                        )
-                    else:
-                        tagger_component(
-                            "",
-                            ["Did not match ❌"],
-                        )
-                    r_expander = st.expander("See reason")
-                    r_expander.write(res["reason"])
-                    jd_expander = st.expander("See job description")
-                    jd_expander.write(job["job_description"])
-                    st.divider()
+            fetch_more = True
+            # First page
+            page = 1
+            page_jobs = fetch_linkedin_page_jobs(job_title, location, time_option, page)
+            if not len(page_jobs):
+                st.error('Could not find any new job at the moment, please make sure if you type your input correctly!', icon="🚨")
+                return 0
+
+            while fetch_more:
+                linkedin_jobs = parse_linkedin_jobs_to_dictionary_list(page_jobs)
+                fetch_more = False
+                for job in linkedin_jobs:
+                    if job['job_title'] and job['job_url'] and job["job_description"]:
+                        st.markdown(f"### [{job['job_title']}]({job['job_url']})")
+                        st.markdown(f"##### {job['company_name']}")
+                        print("Invoking chain .. ")
+                        with st.spinner('Reading it carefully...'):
+                            start = time.perf_counter()
+                            res = chain.invoke({
+                                "job_title": job["job_title"],
+                                "job_company": job["company_name"],
+                                "job_company_location": job["city"],
+                                "job_description": job["job_description"],
+                                "criteria": desired_criteria})
+                            end = time.perf_counter()
+                            elapsed_time = end - start  # Calculate the elapsed time
+                            print(f"Time took: {elapsed_time} seconds")
+                        if "is_relevant_job" in res and res["is_relevant_job"]:
+                            tagger_component(
+                                "",
+                                ["Matched ✅"],
+                            )
+                        else:
+                            tagger_component(
+                                "",
+                                ["Did not match ❌"],
+                            )
+                        r_expander = st.expander("See reason")
+                        r_expander.write(res["reason"])
+                        jd_expander = st.expander("See job description")
+                        jd_expander.write(job["job_description"])
+                        st.divider()
+
+                # Checking if more jobs are available to fetch if yes show button to fetch more
+                print("END OF A PAGE")
+                page += 1
+                page_jobs = fetch_linkedin_page_jobs(job_title, location, time_option, page)
+                if len(page_jobs):
+                    if st.button("Analyze more jobs .."):
+                        fetch_more = True
 
     return 0
 
